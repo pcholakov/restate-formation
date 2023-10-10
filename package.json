@@ -10,10 +10,12 @@
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "verify": "npm run format -- --check && npm run lint && npm run build",
     "build": "tsc --noEmitOnError",
-    "app": "node ./dist/formation-service.js",
-    "app-dev": "ts-node-dev --watch ./src --respawn --transpile-only ./src/formation-service.js"
+    "service": "node ./dist/formation-service.js",
+    "service-dev": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --watch ./src --respawn --transpile-only ./src/formation-service.ts",
+    "discover-services": "curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:8080\"}'"
   },
   "dependencies": {
+    "@aws-sdk/client-iam": "^3.427.0",
     "@aws-sdk/client-lambda": "^3.427.0",
     "@restatedev/restate-sdk": "^0.3.1",
     "jszip": "^3.10.1",

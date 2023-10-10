@@ -1,0 +1,35 @@
+### Restate
+
+# @name Register services
+curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8080"}'
+
+### Formation service
+
+@formation_service_base_url = http://localhost:9090/formation
+@function_name = fn1
+
+### Create function
+
+POST {{formation_service_base_url}}/createFunction
+content-type: application/json
+
+{
+    "key": "{{function_name}}", 
+    "request": { 
+        "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify(`Hello!`) }; };" 
+    } 
+}
+
+### Describe function
+
+POST {{formation_service_base_url}}/describeFunction
+content-type: application/json
+
+{ "key": "{{function_name}}" }
+
+### Delete function
+
+POST {{formation_service_base_url}}/deleteFunction
+content-type: application/json
+
+{ "key": "{{function_name}}" }

@@ -1,7 +1,9 @@
+import * as iam from "@aws-sdk/client-iam";
+import * as lambda from "@aws-sdk/client-lambda";
 import * as restate from "@restatedev/restate-sdk";
 import { z } from "zod";
-import * as commons from "./common-resources";
-import * as functions from "./functions";
+import * as functions from "./resources/functions";
+import * as roles from "./resources/roles";
 
 const FunctionSchema = z.object({
   functionName: z.string(),
@@ -22,12 +24,17 @@ export type CloudFunction = {
 export type Result = { success: boolean; reason?: string };
 
 enum ProvisioningStatus {
-  NEW = 0,
-  PROVISIONING = 1,
-  STABLE = 2,
-  FAILED = 3,
-  DELETED = 4,
+  NEW = "NEW",
+  PROVISIONING = "PROVISIONING",
+  AVAILABLE = "AVAILABLE",
+  FAILED = "FAILED",
 }
+
+const clientOpts = {
+  region: process.env["AWS_REGION"],
+};
+const lambdaClient = new lambda.LambdaClient(clientOpts);
+const iamClient = new iam.IAMClient(clientOpts);
 
 async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Creating function", functionName, request });
@@ -41,19 +48,25 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   }
   const fn = validateResult.data satisfies CloudFunction;
 
-  const status: ProvisioningStatus = (await ctx.get("status")) ?? ProvisioningStatus.NEW;
+  const rawStatus = (await ctx.get("status")) as ProvisioningStatus | undefined | null;
+  const status: ProvisioningStatus = rawStatus ?? ProvisioningStatus.NEW;
+  console.log({ message: `Function ${functionName} is in status ${status} (rawStatus: ${rawStatus})` });
 
   switch (status) {
-    case (ProvisioningStatus.NEW, ProvisioningStatus.DELETED):
+    case ProvisioningStatus.NEW:
+      console.log({ message: "Transitioning to provisioning ..." });
       ctx.set("status", ProvisioningStatus.PROVISIONING);
-      const roleArn = await ctx.rpc<commons.API>({ path: "commons" }).createRole("execution-role");
 
-      const result = await ctx
-        .rpc<functions.API>({ path: "functions" })
-        .createFunction(functionName, { ...fn, roleArn });
+      const roleArn = await ctx.sideEffect(() => roles.createRole(iamClient, "restate-fn-execution-role"));
+      const functionOutput = await ctx.sideEffect(() =>
+        functions.createLambdaFunction(lambdaClient, { ...fn, roleArn: roleArn }),
+      );
 
-      ctx.set("status", ProvisioningStatus.STABLE);
-      return result;
+      ctx.set("status", ProvisioningStatus.AVAILABLE);
+      return {
+        success: true,
+        reason: functionOutput.FunctionArn,
+      };
 
     case ProvisioningStatus.PROVISIONING:
       return {
@@ -61,10 +74,10 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
         reason: "This function is busy updating. Please try again later.",
       };
 
-    case ProvisioningStatus.STABLE:
+    case ProvisioningStatus.AVAILABLE:
       return {
         success: false,
-        reason: "This function is in a terminal state. Create a new one.",
+        reason: "This function is already in a stable state. Please use update instead.",
       };
 
     default:
@@ -72,13 +85,42 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   }
 }
 
+async function describeFunction(ctx: restate.RpcContext, functionName: string) {
+  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+
+  if (status == null) {
+    throw new restate.TerminalError(`No such function: ${functionName}`);
+  } else if (status !== ProvisioningStatus.AVAILABLE) {
+    throw new restate.TerminalError(`Cannot describe function in status: ${status}`);
+  }
+
+  const fn = await lambdaClient.send(new lambda.GetFunctionCommand({ FunctionName: functionName }));
+  return {
+    success: true,
+    status: status,
+    configuration: {
+      Configuration: fn.Configuration,
+    },
+  };
+}
+
 async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
-  const status: ProvisioningStatus = (await ctx.get("status")) ?? ProvisioningStatus.NEW;
+  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+
+  console.log({ message: `Deleting function ${functionName} in status ${status}` });
+
+  if (status == null) {
+    return {
+      success: false,
+      reason: `Not found: ${functionName}`,
+    };
+  }
+
   switch (status) {
-    case ProvisioningStatus.STABLE:
-      const result = await ctx.rpc<functions.API>({ path: "functions" }).deleteFunction(functionName);
+    case ProvisioningStatus.AVAILABLE:
+      const result = await ctx.sideEffect(() => functions.deleteLambdaFunction(lambdaClient, functionName));
       if (result.success) {
-        ctx.set("status", ProvisioningStatus.DELETED);
+        ctx.clear("status");
       }
       return result;
 
@@ -90,23 +132,10 @@ async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
   }
 }
 
-async function cleanupFailed(ctx: restate.RpcContext, functionName: string) {
-  if ((await ctx.get("status")) === ProvisioningStatus.FAILED) {
-    ctx.rpc<API>({ path: "provisioning" }).deleteFunction(functionName);
-  }
-}
-
 const formationRouter = restate.keyedRouter({
   createFunction,
   deleteFunction,
-  cleanupFailed,
+  describeFunction,
 });
 
-type API = typeof formationRouter;
-
-restate
-  .createServer()
-  .bindKeyedRouter("formation", formationRouter)
-  .bindKeyedRouter("functions", functions.router)
-  .bindRouter("commons", commons.router)
-  .listen(8080);
+restate.createServer().bindKeyedRouter("formation", formationRouter).listen(8080);
