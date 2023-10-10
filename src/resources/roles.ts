@@ -2,7 +2,7 @@ import * as iam from "@aws-sdk/client-iam";
 
 export type RoleARN = string;
 
-export async function createRole(client: iam.IAMClient, roleName: string): Promise<RoleARN> {
+export async function createRole(client: iam.IAMClient, roleName: string, functionName: string): Promise<RoleARN> {
   try {
     // The IAM SDK will throw if the role does not exist; coerce the return types into non-nullable on success.
     return (await client.send(new iam.GetRoleCommand({ RoleName: roleName }))).Role!.Arn!;
@@ -41,7 +41,7 @@ export async function createRole(client: iam.IAMClient, roleName: string): Promi
           {
             Effect: "Allow",
             Action: ["logs:PutLogEvents"],
-            Resource: "arn:aws:logs:*:*:*",
+            Resource: `arn:aws:logs:log-group:/aws/lambda/${functionName}:*`,
           },
         ],
       }),

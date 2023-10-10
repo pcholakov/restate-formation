@@ -57,7 +57,9 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
       console.log({ message: "Transitioning to provisioning ..." });
       ctx.set("status", ProvisioningStatus.PROVISIONING);
 
-      const roleArn = await ctx.sideEffect(() => roles.createRole(iamClient, "restate-fn-execution-role"));
+      const roleArn = await ctx.sideEffect(() =>
+        roles.createRole(iamClient, "restate-fn-execution-role", functionName),
+      );
       const functionOutput = await ctx.sideEffect(() =>
         functions.createLambdaFunction(lambdaClient, { ...fn, roleArn: roleArn }),
       );

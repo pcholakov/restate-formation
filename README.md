@@ -7,8 +7,9 @@ This example implements provisioning an opinionated Function template on AWS Lam
 Exposes the following RPC operations:
 
 - create function
-- update function
+- update function (TODO)
 - delete function
+- describe a function by name
 
 A function has the following model:
 
@@ -26,7 +27,16 @@ interface Function {
 
 ### Prerequisites
 
-Make sure that the current shell has valid AWS credentials, either configured as a credential provider for the current user or via environment variables.
+Make sure that the current shell has valid AWS credentials, either configured as a credential provider for the current user or via environment variables. The AWS role under which the Formation service executes must have the following permissions at a minimum:
+
+- `iam:CreateRole`
+- `iam:AttachRolePolicy`
+- `lambda:CreateFunction`
+- `lambda:GetFunction*`
+- `lambda:UpdateFunction*`
+- `lambda:DeleteFunction`
+
+Alternatively, attach the `AWSLambdaFullAccess` managed policy. Functions are created with a very basic execution role that only permits them logging to their own CloudWatch Log group.
 
 ```shell
 aws sts get-caller-identity
@@ -37,7 +47,7 @@ Build and start the service:
 ```shell
 npm install
 npm run build
-npm run app
+npm run service
 ```
 
 ### Launch the runtime
@@ -105,3 +115,5 @@ Create a function.
 ```shell
 curl -X POST localhost:9090/functions/createFunction -H 'content-type: application/json' -d '{"key": "fn-name", "request": { "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify(`Hello!`) }; };" } }'
 ```
+
+For more API interactions, see [sample-requests.http](sample-requests.http).
