@@ -14,10 +14,23 @@ POST {{formation_service_base_url}}/createFunction
 content-type: application/json
 
 {
-    "key": "{{function_name}}", 
-    "request": { 
-        "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify(`Hello!`) }; };" 
-    } 
+    "key": "{{function_name}}",
+    "request": {
+        "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify('Hello!') } };"
+    }
+}
+
+### Update function
+
+POST {{formation_service_base_url}}/updateFunction
+content-type: application/json
+
+{
+    "key": "{{function_name}}",
+    "request": {
+        "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify('Hola!') } };",
+        "timeoutSeconds": 1
+    }
 }
 
 ### Describe function

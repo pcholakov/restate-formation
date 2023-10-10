@@ -5,7 +5,7 @@ import { z } from "zod";
 import * as functions from "./resources/functions";
 import * as roles from "./resources/roles";
 
-const FunctionSchema = z.object({
+const CreateFunctionSchema = z.object({
   functionName: z.string(),
   code: z.string(),
   memoryMegabytes: z.number().optional(),
@@ -13,7 +13,7 @@ const FunctionSchema = z.object({
   logRetentionDays: z.number().optional(),
 });
 
-export type CloudFunction = {
+export type CreateCloudFunction = {
   functionName: string;
   code: string;
   memoryMegabytes?: number;
@@ -21,12 +21,23 @@ export type CloudFunction = {
   logRetentionDays?: number;
 };
 
+const UpdateFunctionSchema = z.object({
+  functionName: z.string(),
+  code: z.string().optional(),
+  memoryMegabytes: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
+  logRetentionDays: z.number().optional(),
+});
+
+export type UpdateCloudFunction = Omit<CreateCloudFunction, "code"> & {
+  code?: string;
+};
+
 export type Result = { success: boolean; reason?: string };
 
 enum ProvisioningStatus {
   NEW = "NEW",
   AVAILABLE = "AVAILABLE",
-  FAILED = "FAILED",
 }
 
 const clientOpts = {
@@ -38,14 +49,14 @@ const iamClient = new iam.IAMClient(clientOpts);
 async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Creating function", functionName, request });
 
-  const validateResult = FunctionSchema.safeParse({
+  const validateResult = CreateFunctionSchema.safeParse({
     ...request,
     functionName,
   });
   if (!validateResult.success) {
     throw new restate.TerminalError("Validation error:", validateResult.error);
   }
-  const fn = validateResult.data satisfies CloudFunction;
+  const fn = validateResult.data satisfies CreateCloudFunction;
 
   const rawStatus = (await ctx.get("status")) as ProvisioningStatus | undefined | null;
   const status: ProvisioningStatus = rawStatus ?? ProvisioningStatus.NEW;
@@ -63,6 +74,8 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
       );
 
       ctx.set("status", ProvisioningStatus.AVAILABLE);
+      ctx.set("state", fn);
+
       return {
         success: true,
         reason: functionOutput.FunctionArn,
@@ -79,22 +92,47 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   }
 }
 
-async function describeFunction(ctx: restate.RpcContext, functionName: string) {
+async function updateFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
+  console.log({ message: "Updating function", functionName, request });
+
+  const validateResult = UpdateFunctionSchema.safeParse({
+    ...request,
+    functionName,
+  });
+  if (!validateResult.success) {
+    throw new restate.TerminalError("Validation error:", validateResult.error);
+  }
+  const updatedFunction = validateResult.data satisfies UpdateCloudFunction;
+
   const status = (await ctx.get("status")) as ProvisioningStatus | null;
 
   if (status == null) {
-    throw new restate.TerminalError(`No such function: ${functionName}`);
+    return {
+      success: false,
+      reason: `Not found: ${functionName}`,
+    };
   } else if (status !== ProvisioningStatus.AVAILABLE) {
-    throw new restate.TerminalError(`Cannot describe function in status: ${status}`);
+    return {
+      success: false,
+      reason: `Cannot update function in status: ${status}`,
+    };
   }
 
-  const fn = await lambdaClient.send(new lambda.GetFunctionCommand({ FunctionName: functionName }));
+  const existingFunction = (await ctx.get("state")) as CreateCloudFunction | null;
+
+  console.log({
+    message: `Updating function ${functionName} in status ${status}.`,
+    state: existingFunction,
+    targetState: updatedFunction,
+  });
+
+  const result = await ctx.sideEffect(() =>
+    functions.updateLambdaFunction(lambdaClient, updatedFunction, existingFunction),
+  );
+  ctx.set("state", updatedFunction);
+
   return {
     success: true,
-    status: status,
-    configuration: {
-      Configuration: fn.Configuration,
-    },
   };
 }
 
@@ -126,8 +164,28 @@ async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
   }
 }
 
+async function describeFunction(ctx: restate.RpcContext, functionName: string) {
+  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+
+  if (status == null) {
+    throw new restate.TerminalError(`No such function: ${functionName}`);
+  } else if (status !== ProvisioningStatus.AVAILABLE) {
+    throw new restate.TerminalError(`Cannot describe function in status: ${status}`);
+  }
+
+  const fn = await lambdaClient.send(new lambda.GetFunctionCommand({ FunctionName: functionName }));
+  return {
+    success: true,
+    status: status,
+    configuration: {
+      Configuration: fn.Configuration,
+    },
+  };
+}
+
 const formationRouter = restate.keyedRouter({
   createFunction,
+  updateFunction,
   deleteFunction,
   describeFunction,
 });
