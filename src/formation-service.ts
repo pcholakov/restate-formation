@@ -25,7 +25,6 @@ export type Result = { success: boolean; reason?: string };
 
 enum ProvisioningStatus {
   NEW = "NEW",
-  PROVISIONING = "PROVISIONING",
   AVAILABLE = "AVAILABLE",
   FAILED = "FAILED",
 }
@@ -55,7 +54,6 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   switch (status) {
     case ProvisioningStatus.NEW:
       console.log({ message: "Transitioning to provisioning ..." });
-      ctx.set("status", ProvisioningStatus.PROVISIONING);
 
       const roleArn = await ctx.sideEffect(() =>
         roles.createRole(iamClient, "restate-fn-execution-role", functionName),
@@ -68,12 +66,6 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
       return {
         success: true,
         reason: functionOutput.FunctionArn,
-      };
-
-    case ProvisioningStatus.PROVISIONING:
-      return {
-        success: false,
-        reason: "This function is busy updating. Please try again later.",
       };
 
     case ProvisioningStatus.AVAILABLE:
