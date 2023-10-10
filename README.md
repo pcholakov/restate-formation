@@ -6,10 +6,8 @@ This example implements provisioning an opinionated Function template on AWS Lam
 
 Exposes the following RPC operations:
 
-- create function
-- update function (TODO)
-- delete function
-- describe a function by name
+- create / update / delete function
+- describe a existing function
 
 A function has the following model:
 
@@ -22,6 +20,8 @@ interface Function {
   logRetentionDays?: number;
 }
 ```
+
+All options bar `functionName` are optional. The Restate request format always uses the function name as the `key`, and the Function payload as the `requeset` attribute. (Since key is mandatory, it overrides `functionName` within the request, if both are provided. In practice, this makes the `functionName` attribute inside the `request` optional.)
 
 ## Running this example
 
