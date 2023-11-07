@@ -51,7 +51,7 @@ describe("function update", () => {
     } satisfies UpdateCloudFunction);
 
     expect(lambdaMock.commandCalls(UpdateFunctionCodeCommand).length).toBe(1);
-    let commandCalls = lambdaMock.commandCalls(UpdateFunctionConfigurationCommand);
+    const commandCalls = lambdaMock.commandCalls(UpdateFunctionConfigurationCommand);
     expect(commandCalls.length).toBe(1);
     expect(lambdaMock.commandCalls(UpdateFunctionConfigurationCommand)[0].args[0].input).toEqual({
       FunctionName: "fn",
