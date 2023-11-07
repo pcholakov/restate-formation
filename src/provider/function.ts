@@ -1,7 +1,7 @@
 import { z } from "zod";
 import * as restate from "@restatedev/restate-sdk";
 import { ProvisioningStatus, Result } from "./common";
-import * as functions from "../aws/functions";
+import * as functions from "../aws/lambda";
 import * as iam from "@aws-sdk/client-iam";
 import * as roles from "../aws/roles";
 import * as lambda from "@aws-sdk/client-lambda";
@@ -27,6 +27,11 @@ const clientOpts = {
 const lambdaClient = new lambda.LambdaClient(clientOpts);
 const iamClient = new iam.IAMClient(clientOpts);
 
+enum State {
+  STATUS = "status",
+  STATE = "state",
+}
+
 async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Creating function", functionName, request });
 
@@ -39,7 +44,7 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   }
   const fn = validateResult.data;
 
-  const rawStatus = (await ctx.get("status")) as ProvisioningStatus | undefined | null;
+  const rawStatus = (await ctx.get(State.STATUS)) as ProvisioningStatus | undefined | null;
   const status: ProvisioningStatus = rawStatus ?? ProvisioningStatus.NEW;
 
   switch (status) {
@@ -51,8 +56,8 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
         functions.createLambdaFunction(lambdaClient, { ...fn, roleArn: roleArn }),
       );
 
-      ctx.set("status", ProvisioningStatus.AVAILABLE);
-      ctx.set("state", fn);
+      ctx.set(State.STATUS, ProvisioningStatus.AVAILABLE);
+      ctx.set(State.STATE, fn);
 
       return {
         success: true,
@@ -82,7 +87,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
   }
   const updatedFunction = validateResult.data;
 
-  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+  const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
 
   if (status == null) {
     return {
@@ -96,7 +101,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
     };
   }
 
-  const existingFunction = (await ctx.get("state")) as CreateCloudFunction | null;
+  const existingFunction = (await ctx.get(State.STATE)) as CreateCloudFunction | null;
 
   console.log({
     message: `Updating function ${functionName} in status ${status}.`,
@@ -105,7 +110,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
   });
 
   await ctx.sideEffect(() => functions.updateLambdaFunction(lambdaClient, updatedFunction, existingFunction));
-  ctx.set("state", updatedFunction);
+  ctx.set(State.STATE, updatedFunction);
 
   return {
     success: true,
@@ -113,7 +118,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
 }
 
 async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
-  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+  const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
 
   console.log({ message: `Deleting function ${functionName} in status ${status}` });
 
@@ -128,7 +133,7 @@ async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
     case ProvisioningStatus.AVAILABLE:
       const result = await ctx.sideEffect(() => functions.deleteLambdaFunction(lambdaClient, functionName));
       if (result.success) {
-        ctx.clear("status");
+        ctx.clear(State.STATUS);
       }
       return result;
 
@@ -141,7 +146,7 @@ async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
 }
 
 async function describeFunction(ctx: restate.RpcContext, functionName: string) {
-  const status = (await ctx.get("status")) as ProvisioningStatus | null;
+  const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
 
   if (status == null) {
     throw new restate.TerminalError(`No such function: ${functionName}`);
@@ -167,7 +172,9 @@ export const functionProvider = restate.keyedRouter({
 
   // Wouldn't this be neat? Restate could implement list for us by providing a simple state entry row mapper fn
   // listFunctions: restate.listHandler((ctx) => {
-  //   functionName: ctx.get("state").functionName,
-  //       status: ctx.get("status"),
+  //   return {
+  //     functionName: ctx.get(State.STATE).functionName,
+  //     status: ctx.get(State.STATUS),
+  //   };
   // }),
 });
