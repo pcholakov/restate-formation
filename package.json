@@ -12,12 +12,13 @@
     "build": "tsc --noEmitOnError",
     "service": "node ./dist/formation-service.js",
     "service-dev": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --watch ./src --respawn --transpile-only ./src/formation-service.ts",
-    "discover-services": "curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:8080\"}'"
+    "restate-runtime-dev": "docker run --name restate_dev --rm -p 8081:8081 -p 9091:9091 -p 9090:9090 -p 5432:5432 ghcr.io/restatedev/restate-dist:latest",
+    "restate-discover-services": "curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:8080\"}'"
   },
   "dependencies": {
     "@aws-sdk/client-iam": "^3.427.0",
     "@aws-sdk/client-lambda": "^3.427.0",
-    "@restatedev/restate-sdk": "^0.3.1",
+    "@restatedev/restate-sdk": "^0.4.x",
     "jszip": "^3.10.1",
     "zod": "^3.22.4"
   },
@@ -25,7 +26,7 @@
     "@typescript-eslint/eslint-plugin": "^6.4.0",
     "@typescript-eslint/parser": "^6.4.0",
     "eslint": "^8.47.0",
-    "prettier": "^2.8.8",
+    "prettier": "^3.x",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.1.6"
   }
