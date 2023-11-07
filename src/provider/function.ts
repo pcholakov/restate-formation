@@ -6,16 +6,24 @@ import * as iam from "@aws-sdk/client-iam";
 import * as roles from "../aws/roles";
 import * as lambda from "@aws-sdk/client-lambda";
 
-const CreateFunctionSchema = z.object({
+const FunctionSchema = z.object({
   functionName: z.string(),
   code: z.string(),
+  memoryMegabytes: z.number(),
+  timeoutSeconds: z.number(),
+  logRetentionDays: z.number(),
+});
+
+type CloudFunctionState = z.infer<typeof FunctionSchema>;
+
+const CreateFunctionSchema = FunctionSchema.extend({
   memoryMegabytes: z.number().optional(),
   timeoutSeconds: z.number().optional(),
   logRetentionDays: z.number().optional(),
 });
 
-const UpdateFunctionSchema = CreateFunctionSchema.extend({
-  code: CreateFunctionSchema.shape.code.optional(),
+const UpdateFunctionSchema = CreateFunctionSchema.partial().required({
+  functionName: true,
 });
 
 export type CreateCloudFunction = z.infer<typeof CreateFunctionSchema>;
@@ -147,20 +155,21 @@ export async function deleteFunction(ctx: restate.RpcContext, functionName: stri
 
 export async function describeFunction(ctx: restate.RpcContext, functionName: string) {
   const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
+  const state = (await ctx.get(State.STATE)) as CloudFunctionState | null;
 
-  if (status == null) {
+  if (status == null || state == null) {
     throw new restate.TerminalError(`No such function: ${functionName}`);
   } else if (status !== ProvisioningStatus.AVAILABLE) {
     throw new restate.TerminalError(`Cannot describe function in status: ${status}`);
   }
 
-  const fn = await lambdaClient.send(new lambda.GetFunctionCommand({ FunctionName: functionName }));
   return {
     success: true,
     status: status,
-    configuration: {
-      Configuration: fn.Configuration,
-    },
+    configuration: state,
+    // _awsConfiguration: ctx.sideEffect(
+    //   async () => await lambdaClient.send(new lambda.GetFunctionCommand({ FunctionName: functionName })),
+    // ),
   };
 }
 
