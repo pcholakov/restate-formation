@@ -11,7 +11,7 @@
     "verify": "npm run format -- --check && npm run lint && npm run build",
     "build": "tsc --noEmitOnError",
     "service": "node ./dist/formation-service.js",
-    "service-dev": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --watch ./src --respawn --transpile-only ./src/formation-service.ts",
+    "service-dev": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --watch ./src --respawn --transpile-only src/server.ts",
     "restate-runtime-dev": "docker run --name restate_dev --rm -p 8081:8081 -p 9091:9091 -p 9090:9090 -p 5432:5432 ghcr.io/restatedev/restate-dist:latest",
     "restate-discover-services": "curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:8080\"}'"
   },
