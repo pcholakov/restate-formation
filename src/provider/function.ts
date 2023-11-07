@@ -32,7 +32,7 @@ enum State {
   STATE = "state",
 }
 
-async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
+export async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Creating function", functionName, request });
 
   const validateResult = CreateFunctionSchema.safeParse({
@@ -75,7 +75,7 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
   }
 }
 
-async function updateFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
+export async function updateFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Updating function", functionName, request });
 
   const validateResult = UpdateFunctionSchema.safeParse({
@@ -117,7 +117,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
   };
 }
 
-async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
+export async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
   const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
 
   console.log({ message: `Deleting function ${functionName} in status ${status}` });
@@ -145,7 +145,7 @@ async function deleteFunction(ctx: restate.RpcContext, functionName: string) {
   }
 }
 
-async function describeFunction(ctx: restate.RpcContext, functionName: string) {
+export async function describeFunction(ctx: restate.RpcContext, functionName: string) {
   const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
 
   if (status == null) {
