@@ -1,7 +1,14 @@
 ### Restate
 
+@restate_runtime_base_url = http://localhost:8081
+
 # @name Register services
-curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8080"}'
+POST {{restate_runtime_base_url}}/endpoints
+content-type: application/json
+
+{
+    "uri": "http://host.docker.internal:8080"
+}
 
 ### Formation service
 
