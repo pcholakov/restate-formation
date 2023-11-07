@@ -1,6 +1,7 @@
 import * as lambda from "@aws-sdk/client-lambda";
 import JSZip from "jszip";
-import { CreateCloudFunction, Result, UpdateCloudFunction } from "../formation-service";
+import { Result } from "../provider/common";
+import { CreateCloudFunction, UpdateCloudFunction } from "../provider/function";
 
 export async function createLambdaFunction(client: lambda.LambdaClient, fn: CreateCloudFunction & { roleArn: string }) {
   return await client.send(
