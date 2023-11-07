@@ -10,14 +10,14 @@ content-type: application/json
     "uri": "http://host.docker.internal:8080"
 }
 
-### Formation service
+### Function CRUD
 
-@formation_service_base_url = http://localhost:9090/formation
+@function_provider_base_url = http://localhost:9090/provider::function
 @function_name = fn1
 
 ### Create function
 
-POST {{formation_service_base_url}}/createFunction
+POST {{function_provider_base_url}}/createFunction
 content-type: application/json
 
 {
@@ -29,7 +29,7 @@ content-type: application/json
 
 ### Update function
 
-POST {{formation_service_base_url}}/updateFunction
+POST {{function_provider_base_url}}/updateFunction
 content-type: application/json
 
 {
@@ -42,14 +42,14 @@ content-type: application/json
 
 ### Describe function
 
-POST {{formation_service_base_url}}/describeFunction
+POST {{function_provider_base_url}}/describeFunction
 content-type: application/json
 
 { "key": "{{function_name}}" }
 
 ### Delete function
 
-POST {{formation_service_base_url}}/deleteFunction
+POST {{function_provider_base_url}}/deleteFunction
 content-type: application/json
 
 { "key": "{{function_name}}" }

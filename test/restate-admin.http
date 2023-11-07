@@ -1,0 +1,15 @@
+### Restate
+
+@restate_runtime_base_url = http://localhost:8081
+
+#### List services
+
+GET {{restate_runtime_base_url}}/services
+
+#### List endpoints
+
+GET {{restate_runtime_base_url}}/endpoints
+
+#### List methods
+
+GET {{restate_runtime_base_url}}//services/provider%2Ffunction/methods

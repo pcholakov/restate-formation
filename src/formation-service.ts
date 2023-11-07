@@ -21,12 +21,8 @@ export type CreateCloudFunction = {
   logRetentionDays?: number;
 };
 
-const UpdateFunctionSchema = z.object({
-  functionName: z.string(),
-  code: z.string().optional(),
-  memoryMegabytes: z.number().optional(),
-  timeoutSeconds: z.number().optional(),
-  logRetentionDays: z.number().optional(),
+const UpdateFunctionSchema = CreateFunctionSchema.extend({
+  code: CreateFunctionSchema.shape.code.optional(),
 });
 
 export type UpdateCloudFunction = Omit<CreateCloudFunction, "code"> & {
@@ -54,18 +50,15 @@ async function createFunction(ctx: restate.RpcContext, functionName: string, req
     functionName,
   });
   if (!validateResult.success) {
-    throw new restate.TerminalError("Validation error:", validateResult.error);
+    throw new restate.TerminalError("Validation error", validateResult.error);
   }
   const fn = validateResult.data satisfies CreateCloudFunction;
 
   const rawStatus = (await ctx.get("status")) as ProvisioningStatus | undefined | null;
   const status: ProvisioningStatus = rawStatus ?? ProvisioningStatus.NEW;
-  console.log({ message: `Function ${functionName} is in status ${status} (rawStatus: ${rawStatus})` });
 
   switch (status) {
     case ProvisioningStatus.NEW:
-      console.log({ message: "Transitioning to provisioning ..." });
-
       const roleArn = await ctx.sideEffect(() =>
         roles.createRole(iamClient, "restate-fn-execution-role", functionName),
       );
@@ -100,7 +93,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
     functionName,
   });
   if (!validateResult.success) {
-    throw new restate.TerminalError("Validation error:", validateResult.error);
+    throw new restate.TerminalError("Validation error", validateResult.error);
   }
   const updatedFunction = validateResult.data satisfies UpdateCloudFunction;
 
@@ -126,9 +119,7 @@ async function updateFunction(ctx: restate.RpcContext, functionName: string, req
     targetState: updatedFunction,
   });
 
-  const result = await ctx.sideEffect(() =>
-    functions.updateLambdaFunction(lambdaClient, updatedFunction, existingFunction),
-  );
+  await ctx.sideEffect(() => functions.updateLambdaFunction(lambdaClient, updatedFunction, existingFunction));
   ctx.set("state", updatedFunction);
 
   return {
@@ -183,11 +174,15 @@ async function describeFunction(ctx: restate.RpcContext, functionName: string) {
   };
 }
 
-const formationRouter = restate.keyedRouter({
+const functionProvider = restate.keyedRouter({
   createFunction,
   updateFunction,
   deleteFunction,
   describeFunction,
+  // listFunctions: restate.listHandler((ctx) => {
+  //   functionName: ctx.get("state").functionName,
+  //       status: ctx.get("status"),
+  // }),
 });
 
-restate.createServer().bindKeyedRouter("formation", formationRouter).listen(8080);
+restate.createServer().bindKeyedRouter("provider::function", functionProvider).listen(8080);

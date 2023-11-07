@@ -58,6 +58,18 @@ npm run service
 docker run --name restate_dev --rm -p 8081:8081 -p 9091:9091 -p 9090:9090 -p 5432:5432 ghcr.io/restatedev/restate-dist:latest
 ```
 
+or alternatively:
+
+```shell
+npm run service
+```
+
+To watch and reload the service on code change, use:
+
+```shell
+npm run service-dev
+```
+
 - For Linux:
 
 ```shell
@@ -72,6 +84,12 @@ Once the runtime is up, let it discover the services of the examples by executin
 
 ```shell
 curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8080"}'
+```
+
+or alternatively:
+
+```shell
+npm run restate-discover-services
 ```
 
 - For Linux:
@@ -110,10 +128,10 @@ This should give you the following output in case of the ticket reservation exam
 
 ### Call the provisioning service
 
-Create a function.
+Create a function using the low-level Function provider:
 
 ```shell
-curl -X POST localhost:9090/functions/createFunction -H 'content-type: application/json' -d '{"key": "fn-name", "request": { "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify(`Hello!`) }; };" } }'
+curl -X POST localhost:9090/provider::function/createFunction -H 'content-type: application/json' -d '{"key": "fn-name", "request": { "code": "export const handler = async (event) => { return { statusCode: 200, body: JSON.stringify(`Hello!`) }; };" } }'
 ```
 
-For more API interactions, see [sample-requests.http](sample-requests.http).
+For more API interaction examples, see [service-interaction.http](test/service-interaction.http).
