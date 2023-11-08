@@ -1,10 +1,15 @@
 import * as lambda from "@aws-sdk/client-lambda";
 import JSZip from "jszip";
 import { Result } from "../provider/common";
-import { CreateCloudFunction, UpdateCloudFunction } from "../provider/function";
+import { CreateFunction, UpdateFunction } from "../provider/function";
 
-export async function createLambdaFunction(client: lambda.LambdaClient, fn: CreateCloudFunction & { roleArn: string }) {
-  return await client.send(
+export async function createLambdaFunction(
+  lambdaClient: lambda.LambdaClient,
+  fn: CreateFunction & {
+    roleArn: string;
+  },
+) {
+  return await lambdaClient.send(
     new lambda.CreateFunctionCommand({
       FunctionName: fn.functionName,
       Code: {
@@ -20,10 +25,10 @@ export async function createLambdaFunction(client: lambda.LambdaClient, fn: Crea
   );
 }
 
-export async function updateLambdaFunction(
+export async function updateLambdaCode(
   lambdaClient: lambda.LambdaClient,
-  fn: UpdateCloudFunction,
-  existingState: CreateCloudFunction | null,
+  fn: UpdateFunction,
+  existingState: CreateFunction | null,
 ) {
   if (fn.code && fn.code !== existingState?.code) {
     console.log("Updating function code ...");
@@ -35,7 +40,13 @@ export async function updateLambdaFunction(
       }),
     );
   }
+}
 
+export async function updateLambdaConfig(
+  lambdaClient: lambda.LambdaClient,
+  fn: UpdateFunction,
+  existingState: CreateFunction | null,
+) {
   if (fn.memoryMegabytes !== existingState?.memoryMegabytes || fn.timeoutSeconds !== existingState?.timeoutSeconds) {
     console.log("Updating function configuration ...");
 
@@ -65,7 +76,7 @@ export async function deleteLambdaFunction(client: lambda.LambdaClient, function
   return { success: true };
 }
 
-async function generateCodeZip(code: string): Promise<Uint8Array> {
+export async function generateCodeZip(code: string): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file("index.mjs", code);
   return await zip.generateAsync({ type: "uint8array" });

@@ -5,29 +5,28 @@ import * as functions from "../aws/lambda";
 import * as iam from "@aws-sdk/client-iam";
 import * as roles from "../aws/roles";
 import * as lambda from "@aws-sdk/client-lambda";
+import { RetrySettings } from "@restatedev/restate-sdk/dist/utils/public_utils";
 
 const FunctionSchema = z.object({
   functionName: z.string(),
   code: z.string(),
   memoryMegabytes: z.number(),
   timeoutSeconds: z.number(),
-  logRetentionDays: z.number(),
 });
 
-type CloudFunctionState = z.infer<typeof FunctionSchema>;
+type FunctionState = z.infer<typeof FunctionSchema>;
 
-const CreateFunctionSchema = FunctionSchema.extend({
+export const CreateFunctionSchema = FunctionSchema.extend({
   memoryMegabytes: z.number().optional(),
   timeoutSeconds: z.number().optional(),
-  logRetentionDays: z.number().optional(),
 });
 
 const UpdateFunctionSchema = CreateFunctionSchema.partial().required({
   functionName: true,
 });
 
-export type CreateCloudFunction = z.infer<typeof CreateFunctionSchema>;
-export type UpdateCloudFunction = z.infer<typeof UpdateFunctionSchema>;
+export type CreateFunction = z.infer<typeof CreateFunctionSchema>;
+export type UpdateFunction = z.infer<typeof UpdateFunctionSchema>;
 
 const clientOpts = {
   region: process.env["AWS_REGION"],
@@ -39,6 +38,11 @@ enum State {
   STATUS = "status",
   STATE = "state",
 }
+
+const awsRetrySettings: RetrySettings = {
+  initialDelayMs: 2000,
+  maxRetries: 5,
+};
 
 export async function createFunction(ctx: restate.RpcContext, functionName: string, request: Object): Promise<Result> {
   console.log({ message: "Creating function", functionName, request });
@@ -57,11 +61,13 @@ export async function createFunction(ctx: restate.RpcContext, functionName: stri
 
   switch (status) {
     case ProvisioningStatus.NEW:
-      const roleArn = await ctx.sideEffect(() =>
-        roles.createRole(iamClient, "restate-fn-execution-role", functionName),
+      const roleArn = await ctx.sideEffect(
+        () => roles.createRole(iamClient, "restate-fn-execution-role", functionName),
+        awsRetrySettings,
       );
-      const functionOutput = await ctx.sideEffect(() =>
-        functions.createLambdaFunction(lambdaClient, { ...fn, roleArn: roleArn }),
+      const functionOutput = await ctx.sideEffect(
+        () => functions.createLambdaFunction(lambdaClient, { ...fn, roleArn: roleArn }),
+        awsRetrySettings,
       );
 
       ctx.set(State.STATUS, ProvisioningStatus.AVAILABLE);
@@ -109,7 +115,7 @@ export async function updateFunction(ctx: restate.RpcContext, functionName: stri
     };
   }
 
-  const existingFunction = (await ctx.get(State.STATE)) as CreateCloudFunction | null;
+  const existingFunction = (await ctx.get(State.STATE)) as CreateFunction | null;
 
   console.log({
     message: `Updating function ${functionName} in status ${status}.`,
@@ -117,7 +123,14 @@ export async function updateFunction(ctx: restate.RpcContext, functionName: stri
     targetState: updatedFunction,
   });
 
-  await ctx.sideEffect(() => functions.updateLambdaFunction(lambdaClient, updatedFunction, existingFunction));
+  await ctx.sideEffect(async () => {
+    await functions.updateLambdaCode(lambdaClient, updatedFunction, existingFunction);
+  }, awsRetrySettings);
+
+  await ctx.sideEffect(async () => {
+    await functions.updateLambdaConfig(lambdaClient, updatedFunction, existingFunction);
+  }, awsRetrySettings);
+
   ctx.set(State.STATE, updatedFunction);
 
   return {
@@ -155,7 +168,7 @@ export async function deleteFunction(ctx: restate.RpcContext, functionName: stri
 
 export async function describeFunction(ctx: restate.RpcContext, functionName: string) {
   const status = (await ctx.get(State.STATUS)) as ProvisioningStatus | null;
-  const state = (await ctx.get(State.STATE)) as CloudFunctionState | null;
+  const state = (await ctx.get(State.STATE)) as FunctionState | null;
 
   if (status == null || state == null) {
     throw new restate.TerminalError(`No such function: ${functionName}`);
